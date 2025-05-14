@@ -1,0 +1,67 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from app.infrastructure.db.session import SessionLocal, engine, Base
+from app.infrastructure.db.models.organizacion_model import OrganizacionModel
+from app.infrastructure.db.models.empresa_model import EmpresaModel
+
+#docker-compose exec app python scripts/poblar_organizaciones.py
+
+def crear_tablas():
+    print("Creando tablas en la base de datos si no existen...")
+    Base.metadata.create_all(bind=engine)     
+    print("Tablas creadas.")
+
+def poblar_organizaciones():
+    session = SessionLocal()
+
+    datos_falsos = [
+        {"nombre": "Grupo ATISA", "alias": "ATISA"},
+        {"nombre": "Soluciones Empresariales S.L.", "alias": "SOLUCIONES"},
+        {"nombre": "TechLegal Consultores", "alias": "TECHLEGAL"},
+        {"nombre": "Distribuciones Ferrer", "alias": "FERRER"},
+        {"nombre": "Innovación Educativa", "alias": "EDUCA"}
+    ]
+
+    for data in datos_falsos:
+        org = OrganizacionModel(nombre=data["nombre"], alias=data["alias"])
+        session.add(org)
+
+    session.commit()
+    session.close()
+    print("Base de datos poblada con datos de prueba.")
+
+def poblar_empresas():
+    session = SessionLocal()
+
+    # Obtener organizaciones existentes
+    organizaciones = session.query(OrganizacionModel).all()
+    if not organizaciones:
+        raise Exception("No hay organizaciones creadas. Primero pobla la tabla de organizaciones.")
+
+    datos_falsos = [
+        {"id_organizacion": organizaciones[0].id, "codigop": "EMP001", "nombre": "Empresa Uno", "cif": "A00000001"},
+        {"id_organizacion": organizaciones[1].id, "codigop": "EMP002", "nombre": "Empresa Dos", "cif": "A00000002"},
+        {"id_organizacion": organizaciones[0].id, "codigop": "EMP003", "nombre": "Empresa Tres", "cif": "A00000003"},
+    ]
+
+    for data in datos_falsos:
+        empresa = EmpresaModel(
+            id_organizacion=data["id_organizacion"],
+            codigop=data["codigop"],
+            nombre=data["nombre"],
+            cif=data["cif"]
+        )
+        session.add(empresa)
+
+    session.commit()
+    session.close()
+    print("Empresas insertadas con éxito.")
+
+if __name__ == "__main__":
+    crear_tablas()
+    print("Poblando base de datos...")
+    poblar_organizaciones()
+    poblar_empresas()
+    print("Base de datos poblada.")
