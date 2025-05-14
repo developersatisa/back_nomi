@@ -1,0 +1,83 @@
+# 📘 Backend Nómina
+
+## 🏗️ Arquitectura y Estructura del Proyecto
+
+Este proyecto está basado en los principios de **DDD (Domain-Driven Design)**, **arquitectura hexagonal** y **principios SOLID**, separando claramente las responsabilidades entre dominio, aplicación, infraestructura y entrada/salida.
+
+```
+app/
+├── domain/                         # Modelo de dominio puro
+│   ├── models/                    # Entidades del dominio (Empresa, Centro, etc.)
+│   └── repositories/             # Interfaces abstractas de repositorios
+├── application/                   # Casos de uso (servicios de aplicación)
+│   └── use_cases/
+│       └── <entidad>/            # Casos de uso por entidad (crear, listar, etc.)
+├── infrastructure/
+│   ├── db/                       # Configuración de la BBDD y modelos SQLAlchemy
+│   │   ├── session.py           # Conexion con SQLAlchemy
+│   │   └── models/
+│   ├── repositories/            # Implementaciones concretas de repositorios
+│   └── interfaces/
+│       └── api/                 # Rutas de FastAPI
+scripts/                          # Scripts para poblar y testear
+```
+
+## 🧠 Entidades implementadas hasta ahora
+
+- `Organización`
+- `Empresa`
+- `Centro`
+
+Cada una con su CRUD completo: modelo, repositorio abstracto, casos de uso, infraestructura y endpoints.
+
+## ✍️ Cómo crear una nueva entidad (CRUD completo)
+
+1. **Modelo de dominio**: `domain/models/<entidad>.py`
+2. **Interfaz de repositorio**: `domain/repositories/<entidad>_repository.py`
+3. **Casos de uso**: `application/use_cases/<entidad>/crear.py`, `listar.py`, etc.
+4. **Modelo SQLAlchemy**: `infrastructure/db/models/<entidad>_model.py`
+5. **Repositorio MySQL**: `infrastructure/repositories/<entidad>_repository_mysql.py`
+6. **Rutas FastAPI**: `infrastructure/interfaces/api/<entidad>_routes.py`
+7. **Registrar el router** en `main.py`
+
+## 🔄 Flujo de información
+
+1. 🧑‍💻 El cliente envía una petición HTTP → `FastAPI` la recibe en `/entidad`  
+2. 🔄 Se llama al caso de uso correspondiente (por ejemplo, `CrearEmpresa`)  
+3. 💼 El caso de uso utiliza un repositorio que implementa la interfaz definida en dominio  
+4. 🛢️ La implementación del repositorio accede a la BBDD vía SQLAlchemy  
+5. 📤 El caso de uso devuelve los datos transformados o una confirmación  
+6. 🌐 El endpoint devuelve la respuesta HTTP al cliente
+
+## 🚀 Comandos Docker básicos
+
+### Construir y levantar contenedores
+```bash
+docker-compose up --build
+```
+
+### Acceder al contenedor backend
+```bash
+docker exec -it backend_nomina bash
+```
+
+### Poblar base de datos con datos dummy
+```bash
+docker exec -it backend_nomina python scripts/poblar_tablas.py
+```
+
+### Probar endpoints con script de pruebas
+```bash
+docker exec -it backend_nomina python scripts/test_endpoints.py
+```
+
+### Reconstruir (si modificas Dockerfile o requirements.txt)
+```bash
+docker-compose build --no-cache
+```
+
+## ✅ Buenas prácticas
+
+- Nunca contamines el dominio con SQLAlchemy, FastAPI o detalles técnicos.
+- Cada capa tiene su responsabilidad: **modelo limpio**, **servicio orquestador**, **infraestructura concreta**.
+- Añade validaciones de negocio en los **casos de uso o modelo de dominio**, según corresponda.
