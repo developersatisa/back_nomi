@@ -76,8 +76,88 @@ docker exec -it backend_nomina python scripts/test_endpoints.py
 docker-compose build --no-cache
 ```
 
+### VER LOGS
+```bash
+docker compose logs -f
+```
+
+
+
 ## ✅ Buenas prácticas
 
 - Nunca contamines el dominio con SQLAlchemy, FastAPI o detalles técnicos.
 - Cada capa tiene su responsabilidad: **modelo limpio**, **servicio orquestador**, **infraestructura concreta**.
 - Añade validaciones de negocio en los **casos de uso o modelo de dominio**, según corresponda.
+
+## 🔐 Seguridad y Autenticación con JWT
+
+Este backend implementa autenticación segura basada en **OAuth2 PasswordBearer + JWT con scopes**, completamente integrada respetando la arquitectura hexagonal y principios DDD/SOLID.
+
+### 🧱 Componentes
+
+- **Entidad `ClienteApi`**: Representa a los clientes autorizados a consumir la API.
+- **Casos de uso**:
+  - `crear_cliente.py`: Registro de nuevos clientes.
+  - `generar_jwt.py`: Autenticación y emisión de JWT.
+- **Infraestructura**:
+  - `security/jwt_utils.py`: Creación y validación de JWT.
+  - `security/deps.py`: Middleware y validación de permisos vía scopes.
+  - `.env`: Claves secretas y configuración.
+  - `config.py`: Acceso centralizado a variables del entorno.
+
+---
+
+### 🛠️ Cómo Registrar un Cliente (usuario API)
+
+1. **POST** `/auth/registro`
+   - Cuerpo (JSON):
+     ```json
+     {
+       "username": "cliente001",
+       "password": "supersegura"
+     }
+     ```
+   - Esto crea un nuevo cliente en la base de datos.
+
+---
+
+### 🔑 Cómo Obtener un Token
+
+1. **POST** `/auth/token`
+   - Cuerpo (JSON):
+     ```json
+     {
+       "username": "cliente001",
+       "password": "supersegura"
+     }
+     ```
+   - Devuelve un token JWT con scopes predefinidos (`read`, `write`).
+
+---
+
+### 📡 Cómo Usar el JWT para Acceder a la API
+
+1. Incluir en cada request el token en la cabecera:
+   ```http
+   Authorization: Bearer <token_recibido>
+   ```
+
+2. Las rutas están protegidas con scopes. Ejemplo:
+   ```python
+   @router.get("/empresas", dependencies=[Security(get_current_user, scopes=["read"])])
+   def listar_empresas():
+       ...
+   ```
+
+---
+
+### 📘 Consideraciones para Desarrolladores
+
+- Los **secretos y parámetros del JWT** (`SECRET_KEY`, `ALGORITHM`, `EXPIRATION`) están en `.env` y accedidos mediante `config.py`.
+- La validación de token y permisos está desacoplada en `security/deps.py`.
+- JWT incluye un array de `scopes` que pueden ampliarse según el perfil del cliente.
+- Para validar un cliente:
+  - Se verifica existencia en la base de datos.
+  - Se comprueba su hash de contraseña.
+  - Se genera un JWT firmado que incluye sus permisos.
+
