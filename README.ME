@@ -89,75 +89,157 @@ docker compose logs -f
 - Cada capa tiene su responsabilidad: **modelo limpio**, **servicio orquestador**, **infraestructura concreta**.
 - Añade validaciones de negocio en los **casos de uso o modelo de dominio**, según corresponda.
 
-## 🔐 Seguridad y Autenticación con JWT
 
-Este backend implementa autenticación segura basada en **OAuth2 PasswordBearer + JWT con scopes**, completamente integrada respetando la arquitectura hexagonal y principios DDD/SOLID.
+# 🔐 Seguridad y Autenticación con JWT
 
-### 🧱 Componentes
-
-- **Entidad `ClienteApi`**: Representa a los clientes autorizados a consumir la API.
-- **Casos de uso**:
-  - `crear_cliente.py`: Registro de nuevos clientes.
-  - `generar_jwt.py`: Autenticación y emisión de JWT.
-- **Infraestructura**:
-  - `security/jwt_utils.py`: Creación y validación de JWT.
-  - `security/deps.py`: Middleware y validación de permisos vía scopes.
-  - `.env`: Claves secretas y configuración.
-  - `config.py`: Acceso centralizado a variables del entorno.
+Este backend implementa un sistema de autenticación robusto basado en **OAuth2 Password Flow + JWT con scopes**, totalmente integrado con FastAPI y compatible con Swagger UI.
 
 ---
 
-### 🛠️ Cómo Registrar un Cliente (usuario API)
+## 🧱 ¿Cómo funciona?
 
-1. **POST** `/auth/registro`
-   - Cuerpo (JSON):
-     ```json
-     {
-       "username": "cliente001",
-       "password": "supersegura"
-     }
-     ```
-   - Esto crea un nuevo cliente en la base de datos.
+Se utiliza `OAuth2PasswordBearer` como esquema de autenticación y los endpoints están protegidos mediante:
 
----
+```python
+user = Security(get_current_user, scopes=["read"])
+```
 
-### 🔑 Cómo Obtener un Token
+Esto obliga a:
+- ✅ Enviar un token JWT válido con cada petición.
+- ✅ Que el token contenga los `scopes` necesarios para acceder al recurso.
 
-1. **POST** `/auth/token`
-   - Cuerpo (JSON):
-     ```json
-     {
-       "username": "cliente001",
-       "password": "supersegura"
-     }
-     ```
-   - Devuelve un token JWT con scopes predefinidos (`read`, `write`).
+Los tokens son creados en `jwt_utiles.py`, verificados en `deps.py`, y consumidos mediante `Security(...)`.
 
 ---
 
-### 📡 Cómo Usar el JWT para Acceder a la API
+## 🛠️ Ciclo completo de autenticación
 
-1. Incluir en cada request el token en la cabecera:
-   ```http
-   Authorization: Bearer <token_recibido>
-   ```
+### 1. Registrar el usuario `admin`
 
-2. Las rutas están protegidas con scopes. Ejemplo:
-   ```python
-   @router.get("/empresas", dependencies=[Security(get_current_user, scopes=["read"])])
-   def listar_empresas():
-       ...
-   ```
+Este usuario puede registrar otros clientes API:
+
+```http
+POST /auth/registro
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "123456"
+}
+```
 
 ---
 
-### 📘 Consideraciones para Desarrolladores
+### 2. Login del `admin` y obtención de token
 
-- Los **secretos y parámetros del JWT** (`SECRET_KEY`, `ALGORITHM`, `EXPIRATION`) están en `.env` y accedidos mediante `config.py`.
-- La validación de token y permisos está desacoplada en `security/deps.py`.
-- JWT incluye un array de `scopes` que pueden ampliarse según el perfil del cliente.
-- Para validar un cliente:
-  - Se verifica existencia en la base de datos.
-  - Se comprueba su hash de contraseña.
-  - Se genera un JWT firmado que incluye sus permisos.
+```http
+POST /auth/token
+Content-Type: application/x-www-form-urlencoded
 
+username=admin
+password=123456
+```
+
+Respuesta esperada:
+
+```json
+{
+  "access_token": "eyJhbGciOi...",
+  "token_type": "bearer"
+}
+```
+
+---
+
+### 3. Registro de nuevos clientes (requiere token de `admin`)
+
+```http
+POST /auth/registro
+Authorization: Bearer <TOKEN_ADMIN>
+Content-Type: application/json
+
+{
+  "username": "cliente001",
+  "password": "pass123"
+}
+```
+
+---
+
+### 4. Login del cliente y obtención de su token
+
+```http
+POST /auth/token
+Content-Type: application/x-www-form-urlencoded
+
+username=cliente001
+password=pass123
+```
+
+---
+
+### 5. Acceso a endpoints protegidos
+
+Los clientes deben incluir el token JWT en cada petición protegida:
+
+```http
+Authorization: Bearer <access_token>
+```
+
+O bien usar el botón "Authorize" en Swagger.
+
+---
+
+## 🔐 Scopes disponibles
+
+| Scope   | Descripción                          |
+|---------|--------------------------------------|
+| `read`  | Acceso de lectura a recursos         |
+| `write` | Creación y modificación de datos     |
+| `admin` | Gestión de usuarios y administración |
+
+---
+
+## ✅ Cómo proteger un endpoint
+
+```python
+@router.get("/empresas")
+def listar(user = Security(get_current_user, scopes=["read"])):
+    ...
+```
+
+Esto hace que el endpoint requiera un token válido y el scope `"read"`.
+
+---
+
+## ❌ Cómo desproteger un endpoint
+
+```python
+# Antes
+def listar(user = Security(get_current_user, scopes=["read"])):
+    ...
+
+# Después (sin seguridad)
+def listar():
+    ...
+```
+
+Esto hace que el endpoint sea público. Úsalo con cuidado.
+
+---
+
+## 📚 Swagger UI y el botón "Authorize"
+
+1. Pulsa "Authorize" en Swagger.
+2. Introduce `username`, `password` y selecciona los scopes.
+3. Swagger obtiene el token desde `/auth/token`.
+4. El token se usará automáticamente en todas las peticiones protegidas.
+
+---
+
+## 📦 Archivos clave
+
+- `auth_routes.py`: login y registro de clientes
+- `jwt_utiles.py`: generación y verificación de tokens
+- `deps.py`: validación de token y control de scopes
+- `config.py`: configuración del JWT (clave secreta, algoritmo, expiración)

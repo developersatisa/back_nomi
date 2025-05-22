@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Body, Path
+from fastapi import APIRouter, Depends, HTTPException, Body, Path, Security
 from sqlalchemy.orm import Session
 
 from app.infrastructure.db.session import get_session
 from app.infrastructure.db.repositories.empresa_repository_mysql import EmpresaRepositoryMySQL
+from app.infrastructure.security.deps import get_current_user
 
 from app.application.use_cases.empresa.crear import CrearEmpresa
 from app.application.use_cases.empresa.obtener import ObtenerEmpresa
@@ -20,23 +21,35 @@ def crear(
     codigop: str = Body(...),
     nombre: str = Body(...),
     cif: str = Body(...),
-    repo = Depends(get_repo)
+    repo = Depends(get_repo),
+    user=Security(get_current_user, scopes=["write"])
 ):
     CrearEmpresa(repo).ejecutar(id_organizacion, codigop, nombre, cif)
     return {"mensaje": "Empresa creada"}
 
 @router.get("/", summary="Listar empresas")
-def listar(repo = Depends(get_repo)):
+def listar(
+    repo = Depends(get_repo),
+    user=Security(get_current_user, scopes=["read"])
+):
     return ListarEmpresas(repo).ejecutar()
 
 @router.get("/{id}", summary="Obtener empresa por ID")
-def obtener(id: int = Path(...), repo = Depends(get_repo)):
+def obtener(
+    id: int = Path(...), 
+    repo = Depends(get_repo),
+    user=Security(get_current_user, scopes=["read"])
+):
     empresa = ObtenerEmpresa(repo).ejecutar(id)
     if not empresa:
         raise HTTPException(404, detail="Empresa no encontrada")
     return empresa
 
 @router.delete("/{id}", summary="Eliminar empresa")
-def eliminar(id: int = Path(...), repo = Depends(get_repo)):
+def eliminar(
+    id: int = Path(...),
+    repo = Depends(get_repo),
+    user=Security(get_current_user, scopes=["write"])
+):
     EliminarEmpresa(repo).ejecutar(id)
     return {"mensaje": "Empresa eliminada"}
